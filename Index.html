@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Envoi GitHub</title>
+<style>
+body{font-family:sans-serif;max-width:500px;margin:auto;padding:16px}
+input,button{width:100%;padding:12px;margin:6px 0;box-sizing:border-box;font-size:16px}
+button{background:#238636;color:#fff;border:0;border-radius:6px}
+pre{white-space:pre-wrap;font-size:13px}
+</style></head><body>
+<h2>Envoyer vers GitHub</h2>
+<input id="token" type="password" placeholder="Token GitHub">
+<input id="repo" placeholder="utilisateur/depot">
+<input id="branch" placeholder="Branche" value="main">
+<input id="dir" placeholder="Dossier de destination (optionnel)">
+<label>Fichiers</label><input id="files" type="file" multiple>
+<label>Dossier</label><input id="folder" type="file" webkitdirectory multiple>
+<button id="go">Envoyer</button>
+<pre id="log"></pre>
+<script>
+const $=id=>document.getElementById(id);
+const keys=['token','repo','branch','dir'];
+keys.forEach(k=>$(k).value=localStorage[k]||$(k).value);
+const log=t=>$('log').textContent+=t+'\n';
+const b64=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
+$('go').onclick=async()=>{
+  keys.forEach(k=>localStorage[k]=$(k).value);
+  const files=[...$('files').files,...$('folder').files];
+  const H={Authorization:'Bearer '+$('token').value,Accept:'application/vnd.github+json'};
+  const br=$('branch').value||'main';
+  const base=$('dir').value.replace(/^\/|\/$/g,'');
+  for(const f of files){
+    const rel=f.webkitRelativePath||f.name;
+    const path=(base?base+'/':'')+rel;
+    const url=`https://api.github.com/repos/${$('repo').value}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+    try{
+      const g=await fetch(url+'?ref='+br,{headers:H});
+      const sha=g.ok?(await g.json()).sha:undefined;
+      const r=await fetch(url,{method:'PUT',headers:H,body:JSON.stringify({message:'Ajout '+path,content:await b64(f),branch:br,sha})});
+      log((r.ok?'✅ ':'❌ ')+path);
+    }catch(e){log('❌ '+path+' '+e.message)}
+  }
+};
+</script></body></html>
